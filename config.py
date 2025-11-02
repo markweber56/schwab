@@ -1,0 +1,29 @@
+import os
+
+# Database
+POSTGRES_USER = os.environ.get("POSTGRES_USER")
+POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD")
+POSTGRES_DB = os.environ.get("POSTGRES_DB")
+POSTGRES_HOST = os.environ.get("POSTGRES_HOST")
+POSTGRES_PORT = os.environ.get("POSTGRES_PORT", 5432)
+DATABASE_URI = f'postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}'
+
+# redis
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD")
+REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
+REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+REDIS_DB = os.environ.get("REDIS_DB", 0)
+REDIS_URL = f'redis://:{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"'
+
+
+class Config:
+    # Database
+    DATABASE_URI = DATABASE_URI
+
+    # Redis
+    REDIS_PASSWORD = REDIS_PASSWORD
+    REDIS_DB = REDIS_DB
+    REDIS_HOST = REDIS_HOST
+    REDIS_URL = REDIS_URL
+    REDIS_PORT = REDIS_PORT
+    REDIS_URL = REDIS_URL
