@@ -1,20 +1,22 @@
 import base64
 import os
-import requests
-import time
 import sys
-
-from sqlalchemy import func
-from sqlalchemy.exc import IntegrityError
+import time
 from datetime import datetime, timedelta
 
-from db import Price, Security, Session
+import pytz
+import requests
 from redis_client import redis_client
+from sqlalchemy import func
+
+from db import Price, Security, Session
 
 TOKEN_URL = 'https://api.schwabapi.com/v1/oauth/token'
 MARKET_DATA_URL = 'https://api.schwabapi.com/marketdata/v1/'
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+EASTERN_TIME_ZONE = pytz.timezone('America/New_York')
+CENTRAL_TIME_ZONE = pytz.timezone('America/Chicago')
 
 PREVIOUS_PRICE_TIMES = {}
 
@@ -24,18 +26,24 @@ secret = os.environ.get("SCHWAB_APPLICATION_SECRET")
 headers = {'Authorization': f'Basic {base64.b64encode(bytes(f"{app_key}:{secret}", "utf-8")).decode("utf-8")}', 'Content-Type': 'application/x-www-form-urlencoded'}
 
 
-def milliseconds_to_cst(millis: int):
-    t_utc = datetime.utcfromtimestamp(millis / 1000.0)
-    t_cst = t_utc - timedelta(hours=5)
-    return t_cst.strftime(DATE_FORMAT)
+def is_before_close():
+    current_time = datetime.now(EASTERN_TIME_ZONE)
+
+    end_time = current_time.replace(hour=15, minute=30)
+
+    return current_time < end_time
+
+
+def format_time(t: datetime, date_format: str, time_zone) -> str:
+    return t.astimezone(time_zone).strftime(date_format)
 
 
 def milliseconds_to_utc(millis: int) -> datetime.utcfromtimestamp:
     return datetime.utcfromtimestamp(millis / 1000.0)
 
 
-def create_log_message(msg: str, time_milliseconds: int):
-    t_formatted = milliseconds_to_cst(time_milliseconds)
+def create_log_message(msg: str, time_zone):
+    t_formatted = format_time(datetime.now(pytz.UTC), '%Y-%m-%d %H:%M:%S', time_zone)
     return f"{t_formatted} - {msg}"
 
 
@@ -94,6 +102,7 @@ def main():
 
     # initialize previous price times
     for observation in last_prices:
+        # print(f'{observation.ticker.replace(".", "/")} - {observation.previous_time}')
         PREVIOUS_PRICE_TIMES[observation.ticker.replace('.', '/')] = observation.previous_time
 
     # tickers from stock.securities table
@@ -103,12 +112,12 @@ def main():
     chunked_tickers = chunk_tickers(all_tickers, 25)
 
     refresh_token = redis_client.get('refresh_token').decode('utf-8')
-    authorization_token = redis_client.get('access_token').decode('utf-8')
+    authorization_token, refresh_token = get_refresh_token(refresh_token)
+    redis_client.set('access_token', authorization_token)
+    redis_client.set('refresh_token', refresh_token)
+    refresh_time = datetime.utcnow() + timedelta(minutes=25)
 
-    refresh_time = datetime.utcnow() + timedelta(minutes=3)
-
-    stop = False
-    while not stop:
+    while True:
         now = datetime.utcnow()
 
         if (refresh_time - now) < timedelta(minutes=2):
@@ -125,7 +134,6 @@ def main():
             response = requests.get(f'{MARKET_DATA_URL}/quotes?{args}', headers={'Authorization': f'Bearer {authorization_token}'})
 
             status_code = response.status_code
-            chunk_prices = []
 
             if status_code == 200:
                 data = response.json()
@@ -140,31 +148,32 @@ def main():
 
                     t_utc = milliseconds_to_utc(t_ms)
 
-                    if ticker in PREVIOUS_PRICE_TIMES:
-                        if PREVIOUS_PRICE_TIMES[ticker] == t_utc:
+                    is_regular_trading_hours = is_before_close()
+
+                    # if ticker in PREVIOUS_PRICE_TIMES:
+                    previous_time = PREVIOUS_PRICE_TIMES[ticker]
+                    PREVIOUS_PRICE_TIMES[ticker] = t_utc
+
+                    print(create_log_message(f"{ticker}: ${last_price}", CENTRAL_TIME_ZONE))
+
+                    # check for repeat values
+                    if previous_time >= t_utc:
+                        if not is_regular_trading_hours:
                             print(f"Data retrieved for {ticker} matches the last record, removing {ticker} from query list")
                             PREVIOUS_PRICE_TIMES.pop(ticker)
-                        else:
-                            PREVIOUS_PRICE_TIMES[ticker] = t_utc
-                            chunk_prices.append(Price(ticker=ticker.replace("/", '.'), utc_time=t_utc, price=last_price))
-                            print(create_log_message(f"{ticker}: ${last_price}", t_ms))
+                    # add record to records to commit
                     else:
-                        PREVIOUS_PRICE_TIMES[ticker] = t_utc
-                        chunk_prices.append(Price(ticker=ticker.replace("/", '.'), utc_time=t_utc, price=last_price))
-                        print(create_log_message(f"{ticker}: ${last_price}", t_ms))
+                        prices_to_commit.append(Price(ticker=ticker.replace("/", '.'), utc_time=t_utc, price=last_price))
 
             else:
                 print(f"{status_code} - Failed to retrieve data")
 
-            prices_to_commit.append(chunk_prices)
-            
         try:
-            db_session.add_all(sum(prices_to_commit, []))
+            db_session.add_all(prices_to_commit)
             db_session.commit()
             print()
-        except IntegrityError as x:
-            print(x._message)
-            sys.exit(1)
+        except Exception as x:
+            print(x.__str__)
 
         all_tickers = list(PREVIOUS_PRICE_TIMES.keys())
         print(f'all tickers length: {len(all_tickers)}')
