@@ -40,3 +40,15 @@ class Price(Base):
     price = Column(Float, nullable=False)
 
     security = relationship("Security", backref="prices")
+
+
+class Velocity(Base):
+    __tablename__ = 'velocity'
+    __table_args__ = {'schema': 'stock'}
+
+    ticker = Column(String(5))
+    utc_time = Column(DateTime(timezone=True), primary_key=True)
+    price = Column(Float, nullable=False)
+    v3 = Column(Float, nullable=False)
+    v5 = Column(Float, nullable=False)
+    v10 = Column(Float, nullable=False)

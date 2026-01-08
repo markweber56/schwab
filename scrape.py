@@ -131,40 +131,50 @@ def main():
 
             args = f"symbols={','.join(chunk)}"
 
-            response = requests.get(f'{MARKET_DATA_URL}/quotes?{args}', headers={'Authorization': f'Bearer {authorization_token}'})
+            status_code = -1
+            try:
+              response = requests.get(f'{MARKET_DATA_URL}/quotes?{args}', headers={'Authorization': f'Bearer {authorization_token}'})
 
-            status_code = response.status_code
+              status_code = response.status_code
+            except Exception as e:
+                print(f'An exception occured: {e}')
 
             if status_code == 200:
                 data = response.json()
+
                 for ticker in chunk:
 
                     # extract data for ticker from response data
-                    ticker_data = data[ticker]
+                    ticker_data = data.get(ticker)
 
-                    # extract time and price values
-                    t_ms = ticker_data['quote']['quoteTime']
-                    last_price = ticker_data['quote']['lastPrice']
+                    if ticker_data:
 
-                    t_utc = milliseconds_to_utc(t_ms)
+                        # extract time and price values
+                        t_ms = ticker_data['quote']['quoteTime']
+                        last_price = ticker_data['quote']['lastPrice']
 
-                    is_regular_trading_hours = is_before_close()
+                        t_utc = milliseconds_to_utc(t_ms)
 
-                    # if ticker in PREVIOUS_PRICE_TIMES:
-                    previous_time = PREVIOUS_PRICE_TIMES[ticker]
-                    PREVIOUS_PRICE_TIMES[ticker] = t_utc
+                        is_regular_trading_hours = is_before_close()
 
-                    print(create_log_message(f"{ticker}: ${last_price}", CENTRAL_TIME_ZONE))
+                        # if ticker in PREVIOUS_PRICE_TIMES:
+                        previous_time = PREVIOUS_PRICE_TIMES[ticker]
+                        PREVIOUS_PRICE_TIMES[ticker] = t_utc
 
-                    # check for repeat values
-                    if previous_time >= t_utc:
-                        if not is_regular_trading_hours:
-                            print(f"Data retrieved for {ticker} matches the last record, removing {ticker} from query list")
-                            PREVIOUS_PRICE_TIMES.pop(ticker)
-                    # add record to records to commit
-                    else:
-                        prices_to_commit.append(Price(ticker=ticker.replace("/", '.'), utc_time=t_utc, price=last_price))
+                        print(create_log_message(f"{ticker}: ${last_price}", CENTRAL_TIME_ZONE))
 
+                        # check for repeat values
+                        if previous_time >= t_utc:
+                            if not is_regular_trading_hours:
+                                print(f"Data retrieved for {ticker} matches the last record, removing {ticker} from query list")
+                                PREVIOUS_PRICE_TIMES.pop(ticker)
+                        # add record to records to commit
+                        else:
+                            prices_to_commit.append(Price(ticker=ticker.replace("/", '.'), utc_time=t_utc, price=last_price))
+
+                    else:  # ticker not in returned data
+                        PREVIOUS_PRICE_TIMES.pop(ticker)
+                      
             else:
                 print(f"{status_code} - Failed to retrieve data")
 
