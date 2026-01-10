@@ -27,7 +27,6 @@ def velocity(time_data, price_data, starting_price):
     denominator = n * sum_time_squred - sum_time * sum_time
 
     return ((numerator / denominator) / starting_price) * 1000000
-    
 
 
 def main():
@@ -65,39 +64,35 @@ def main():
                 func.date(Price.utc_time) == date
             ).order_by(Price.utc_time).all()
 
-            # print(len(price_data))
-
-            # zero_price = price_data[0]
-            # print(type(zero_price))
-            # print(zero_price.price)
-            # print(type(zero_price.utc_time))
-            # print(datetime_to_int(zero_price.utc_time))
             t = [datetime_to_int(pd.utc_time) for pd in price_data]
             p = [pd.price for pd in price_data]
             p0 = p[0]
 
-            NUM_POINTS = 10
+            # NUM_POINTS = 10
 
             for i in range(len(t)):
-                v3 = 0
                 v5 = 0
                 v10 = 0
-                if i > 2:
-                    v3 = velocity(t[i-3:i], p[i-3:i], p0)
+                v15 = 0
+                v30 = 0
                 if i > 4:
                     v5 = velocity(t[i-5:i], p[i-5:i], p0)
-                if i > NUM_POINTS - 1:
-                    v10 = velocity(t[i-NUM_POINTS:i], p[i-NUM_POINTS:i], p0)
-                # print(f'{v3}, {v5}, {v10}')
+                if i > 9:
+                    v10 = velocity(t[i-10:i], p[i-10:i], p0)
+                if i > 14:
+                    v15 = velocity(t[i-15:i], p[i-15:i], p0)
+                if i > 29:
+                    v30 = velocity(t[i-30:i], p[i-30:i], p0)
 
                 velocity_data.append(
                     Velocity(
                       ticker=ticker,
                       utc_time=price_data[i].utc_time,
                       price=price_data[i].price,
-                      v3=v3,
                       v5=v5,
-                      v10=v10
+                      v10=v10,
+                      v15=v15,
+                      v30=v30
                     )
                 )
 
@@ -106,5 +101,10 @@ def main():
 
     db_session.close()
 
+
 if __name__ == '__main__':
+    start_time = datetime.now()
     main()
+    end_time = datetime.now()
+    execution_time = end_time - start_time
+    print(f"Program completed in {execution_time.total_seconds()} seconds")

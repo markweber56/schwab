@@ -2,3 +2,8 @@ __pycache__/
 venv/
 .env
 logs/
+.idea/
+target/
+jars/
+config.json
+run.sh

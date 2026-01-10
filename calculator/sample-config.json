@@ -1,0 +1,10 @@
+{
+  "database": {
+    "server": "localhost",
+    "port": "5432",
+    "dbUser": "",
+    "dbPassword": "",
+    "dbName": "",
+    "driver": "org.postgresql.Driver"
+  }
+}

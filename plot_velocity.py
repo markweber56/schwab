@@ -21,7 +21,8 @@ def plot_ticker(ticker: str, start_date: str, end_date: str):
 
     datetimes = [p.utc_time for p in data]
     price = [p.price for p in data]
-    velocities = [p.v10 for p in data]
+    velocities10 = [p.v10 for p in data]
+    velocities30 = [p.v30 for p in data]
 
     # print(datetimes)
 
@@ -38,10 +39,12 @@ def plot_ticker(ticker: str, start_date: str, end_date: str):
     color = 'tab:red'
     ax2.set_ylabel('Velocity', color=color)
     ax2.tick_params(axis='y', color=color)
-    ax2.plot(datetimes, velocities, color=color)
+    ax2.plot(datetimes, velocities10, color=color)
     ax2.tick_params(axis='y', labelcolor=color)
 
- 
+    ax3 = ax1.twinx()
+    color = 'tab:green'
+    ax3.plot(datetimes, velocities30, color=color)
 
     plt.grid(True)
     plt.show()
